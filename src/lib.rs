@@ -1,33 +1,29 @@
-use std::{
-    cmp::Ordering,
-    collections::HashMap,
-    error::Error,
-};
+use std::{cmp::Ordering, collections::HashMap, error::Error};
 
 struct HuffmanCoding<'a> {
     msg: &'a str,
-    heap_queue: Vec<HeapNode>,
     codes: HashMap<char, String>,
-    reverse_map: HashMap<String, char>,
+    reverse_codes: HashMap<String, char>,
 }
 
 #[allow(dead_code)]
 impl<'a> HuffmanCoding<'a> {
     pub fn new(msg: &'a str) -> HuffmanCoding<'a> {
-        HuffmanCoding {
+        let mut huff = HuffmanCoding {
             msg,
-            heap_queue: Vec::new(),
             codes: HashMap::new(),
-            reverse_map: HashMap::new(),
-        }
+            reverse_codes: HashMap::new(),
+        };
+        let codes = Self::make_codes(&huff);
+        huff.codes = codes.0;
+        huff.reverse_codes = codes.1;
+        huff
     }
+
     // ----------------- Compression Methods -----------------
 
     /// Compresses the message as a vector of bytes
-    pub fn compress(&mut self) -> Result<Vec<u8>, Box<dyn Error>> {
-        let frequency = self.make_frequency_map();
-        self.make_heap(frequency);
-        self.make_codes();
+    pub fn compress(&self) -> Result<Vec<u8>, Box<dyn Error>> {
         let encoded_msg = self.encoded_msg();
         let padded_encoded_msg = self.pad_encoded_msg(encoded_msg);
         self.byte_vec(padded_encoded_msg)
@@ -69,17 +65,21 @@ impl<'a> HuffmanCoding<'a> {
     }
     /// Maps each character to its corresponding Huffman code.
     /// characters with a high frequency will have a lower binary than characters with a low frequency.
-    fn make_codes(&mut self) {
+    fn make_codes(&self) -> (HashMap<char, String>, HashMap<String, char>) {
+        let mut heap_queue = self.make_heap();
+        let mut codes: HashMap<char, String> = HashMap::new();
+        let mut reverse_map: HashMap<String, char> = HashMap::new();
         // The amount of bits needed is equal to the log base 2 of the number of characters in the message.
-        let bit_len = f64::ceil(f64::log2(self.heap_queue.len() as f64)) as usize;
+        let bit_len = f64::ceil(f64::log2(heap_queue.len() as f64)) as usize;
         let mut counter = 0;
 
-        while let Some(node) = self.heap_queue.pop() {
-            let binary_string = format!("{:0width$b}", counter, width=bit_len);
-            self.codes.insert(node.char, binary_string.clone());
-            self.reverse_map.insert(binary_string, node.char);
+        while let Some(node) = heap_queue.pop() {
+            let binary_string = format!("{:0width$b}", counter, width = bit_len);
+            codes.insert(node.char, binary_string.clone());
+            reverse_map.insert(binary_string, node.char);
             counter += 1;
         }
+        (codes, reverse_map)
     }
 
     /// Helper function for incrementing the binary counter correctly.
@@ -109,12 +109,14 @@ impl<'a> HuffmanCoding<'a> {
     /// Turns the frequency map into a min heap.
     /// The min heap contains HeapNodes which are used to build the Huffman tree.
     /// The HeapNodes are sorted by their frequency.
-    fn make_heap(&mut self, frequency: HashMap<char, u32>) {
-        self.heap_queue = frequency
+    fn make_heap(&self) -> Vec<HeapNode> {
+        let frequency = self.make_frequency_map();
+        let mut heap_queue: Vec<HeapNode> = frequency
             .iter()
             .map(|(key, value)| HeapNode::new(*key, *value))
             .collect();
-        self.heap_queue.sort_by(|a, b| a.freq.cmp(&b.freq));
+        heap_queue.sort_by(|a, b| a.freq.cmp(&b.freq));
+        heap_queue
     }
 
     /// A byte is 8 bits, the characters with a high frequency will have a short binary string.
@@ -235,20 +237,19 @@ mod tests {
 
     #[test]
     fn make_heap_works() {
-        let mut huff = super::HuffmanCoding::new("Hello world");
-        let freq = huff.make_frequency_map();
-        huff.make_heap(freq);
-        assert_eq!(huff.heap_queue.len(), 8);
-        assert_eq!(huff.heap_queue[7].char, 'l');
-        assert_eq!(huff.heap_queue[6].char, 'o');
+        let huff = super::HuffmanCoding::new("Hello world");
+        let heap = huff.make_heap();
+        assert_eq!(heap.len(), 8);
+        assert_eq!(heap[7].char, 'l');
+        assert_eq!(heap[6].char, 'o');
     }
 
     #[test]
     fn compress_works() {
         let message = include_str!("test_files/bing_chilling.txt");
-        let mut huff = super::HuffmanCoding::new(message);
+        let huff = super::HuffmanCoding::new(message);
         let comp_msg = huff.compress().unwrap();
-        let decompressed = super::HuffmanCoding::decompress(comp_msg, huff.reverse_map).unwrap();
+        let decompressed = super::HuffmanCoding::decompress(comp_msg, huff.reverse_codes).unwrap();
         assert_eq!(decompressed, message);
     }
 
