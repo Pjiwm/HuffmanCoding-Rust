@@ -2,7 +2,6 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     error::Error,
-    fmt::{Display, Formatter},
 };
 
 struct HuffmanCoding<'a> {
@@ -73,11 +72,13 @@ impl<'a> HuffmanCoding<'a> {
     fn make_codes(&mut self) {
         // The amount of bits needed is equal to the log base 2 of the number of characters in the message.
         let bit_len = f64::ceil(f64::log2(self.heap_queue.len() as f64)) as usize;
-        let mut binary = BitString::new(bit_len);
+        let mut counter = 0;
+
         while let Some(node) = self.heap_queue.pop() {
-            self.codes.insert(node.char, binary.to_string());
-            self.reverse_map.insert(binary.to_string(), node.char);
-            binary.increment();
+            let binary_string = format!("{:0width$b}", counter, width=bit_len);
+            self.codes.insert(node.char, binary_string.clone());
+            self.reverse_map.insert(binary_string, node.char);
+            counter += 1;
         }
     }
 
@@ -218,34 +219,6 @@ impl PartialEq for HeapNode {
 
 impl Eq for HeapNode {}
 
-struct BitString(Vec<bool>);
-impl BitString {
-    fn new(len: usize) -> BitString {
-        BitString(vec![false; len])
-    }
-
-    fn increment(&mut self) {
-        if let Some(i) = self.0.iter().rposition(|&b| !b) {
-            self.0[i] = true;
-            for j in i + 1..self.0.len() {
-                self.0[j] = false;
-            }
-        } else {
-            self.0.push(true);
-        }
-    }
-}
-
-impl Display for BitString {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            self.0.iter().fold(String::new(), |prev, bit| prev
-                + if *bit { "1" } else { "0" })
-        )
-    }
-}
 mod tests {
     #[test]
     fn make_frequency_map_works() {
